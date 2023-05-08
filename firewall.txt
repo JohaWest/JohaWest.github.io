@@ -1,0 +1,36 @@
+chain myinput {
+type filter hook input priority 0; policy drop;
+#meta nftrace set 1
+icmpv6 type { nd-neighbor-advert, nd-neighbor-solicit, nd-router-so-licit } accept
+iifname $iifc ip saddr $i4nw icmp type echo-request accept
+iifname $iifc ip6 saddr $i6nw icmpv6 type echo-request accept
+}
+chain myoutput {
+type filter hook output priority 0; policy drop;
+#meta nftrace set 1
+icmpv6 type { nd-neighbor-advert, nd-neighbor-solicit, nd-router-ad-vert } accept
+oifname $iifc ip daddr $i4nw icmp type echo-reply accept
+oifname $iifc ip6 daddr $i6nw icmpv6 type echo-reply accept
+}^
+
+
+----------------------
+table inet myfilter {
+ chain myinput {
+	type filter hook input priority 0; policy drop;
+	#meta nftrace set 1
+	icmpv6 type { nd-neighbor-advert, nd-neighbor-solicit, nd-router-so-licit } accept
+	iifname $iifc ip saddr $i4nw icmp type echo-request accept
+	iifname $iifc ip6 saddr $i6nw icmpv6 type echo-request accept
+ }
+ chain myoutput {
+	type filter hook output priority 0; policy drop;
+	#meta nftrace set 1
+	icmpv6 type { nd-neighbor-advert, nd-neighbor-solicit, nd-router-ad-vert } accept
+	oifname $iifc ip daddr $i4nw icmp type echo-reply accept
+	oifname $iifc ip6 daddr $i6nw icmpv6 type echo-reply accept
+}
+  chain myforward {
+    type filter hook forward priority 0; policy drop;
+  }
+}

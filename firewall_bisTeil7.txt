@@ -1,0 +1,102 @@
+#!/usr/sbin/nft -f
+
+define iifc = eth1               # Interface name to internal network
+define i4nw = 10.0.4.0/24       # Internal IPv4 network
+define i4ad = 10.0.4.1          # Internal IPv4 address
+define i6nw = 2001:db8:2:0004::/64  # Internal IPv6 network
+define i6ad = 2001:db8:2:0004::1    # Internal IPv6 address
+
+define eifc = eth0               # Interface name to external network
+define e4nw = 192.168.4.0/25    # External IPv4 network
+define e4ad = 192.168.4.1       # External IPv4 address
+define e6nw = 2001:db8:3:0004::/64  # External IPv6 network
+define e6ad = 2001:db8:3:0004::1    # External IPv6 address
+
+define difc = eth2               # Interface name to DMZ network
+define d4nw = 192.168.4.128/25  # DMZ IPv4 network
+define d4ad = 192.168.4.129     # DMZ IPv4 address
+define d6nw = 2001:db8:1:0004::/64  # DMZ IPv6 network
+define d6ad = 2001:db8:1:0004::1    # DMZ IPv6 address
+
+flush ruleset
+
+table inet myfilter {
+chain myinput {
+	type filter hook input priority 0; policy drop;
+
+	#meta nftrace set 1
+	icmpv6 type { nd-neighbor-advert, nd-neighbor-solicit, nd-router-solicit } accept
+
+	# Internal >Firewall: Accept ICMP
+	iifname $iifc ip saddr $i4nw icmp type echo-request accept
+	iifname $iifc ip6 saddr $i6nw icmpv6 type echo-request accept
+
+	# DMZ >Firewall Accept ICMP
+	iifname $difc ip saddr $d4nw icmp type echo-request accept
+	iifname $difc ip6 saddr $d6nw icmpv6 type echo-request accept
+}
+chain myoutput {
+	type filter hook output priority 0; policy drop;
+	#meta nftrace set 1
+	icmpv6 type { nd-neighbor-advert, nd-neighbor-solicit, nd-router-advert } accept
+	
+	# Internal >Firewall Accept ICMP
+	oifname $iifc ip daddr $i4nw icmp type echo-reply accept
+	oifname $iifc ip6 daddr $i6nw icmpv6 type echo-reply accept
+
+	# DMZ >Firewall  Accept ICMP
+	oifname $difc ip daddr $d4nw icmp type echo-reply accept
+	oifname $difc ip6 daddr $d6nw icmpv6 type echo-reply accept
+}
+chain myforward {
+	#alle Pakete passieren
+	ct state established,related accept
+	
+    	type filter hook forward priority 0; policy drop;
+	# Internal >DMZ Accept SSH
+	iifname $iifc oifname $difc ip saddr $i4nw tcp dport ssh ct state new accept
+	iifname $iifc oifname $difc ip6 saddr $i6nw tcp dport ssh ct state new accept
+	
+	# DMZ > Internal Accept SSH
+	iifname $difc oifname $iifc ip daddr $i4nw tcp sport ssh tcp flags != syn ct state new accept
+	iifname $difc oifname $iifc ip6 daddr $i6nw tcp sport ssh tcp flags != syn ct state new accept
+	
+	# 6.13: Internal nach DMZ Accept Ping
+	iifname $iifc oifname $difc ip saddr $i4nw icmp type echo-request ct state new accept
+	iifname $iifc oifname $difc ip6 saddr $i6nw icmp type echo-request ct state new accept
+	
+	# 6.13:  Internal nach External Accept Ping
+	iifname $iifc oifname $eifc ip saddr $i4nw icmp type echo-request ct state new accept
+	iifname $iifc oifname $eifc ip6 saddr $i6nw icmp type echo-request ct state new accept
+
+	# 6.14: External nach DMZ Accept SSH
+	iifname $eifc oifname $difc ip saddr $e4nw tcp dport ssh ct state new accept
+	iifname $eifc oifname $difc ip6 saddr $e6nw tcp dport ssh ct state new accept
+	
+	# 6.15: Internal nach DMZ Accept SSH
+	iifname $iifc oifname $difc ip saddr $i4nw tcp dport ssh ct state new accept
+	iifname $iifc oifname $difc ip6 saddr $i6nw tcp dport ssh ct state new accept
+	
+	# 6.16: External nach DMZ Accept FTP
+	iifname $eifc oifname $difc ip saddr $e4nw tcp dport ftp ct state new accept
+	iifname $eifc oifname $difc ip6 saddr $e6nw tcp dport ftp ct state new accept
+
+	# 6.17: Internal nach External Accept All TCP
+	iifname $iifc oifname $eifc ip saddr $i4nw ip protocol tcp ct state new accept
+	iifname $iifc oifname $eifc ip6 saddr $i6nw ip6 nexthdr tcp ct state new accept
+	
+	# 6.18: Internal nach External Accept UDP Traceroute
+	iifname $iifc oifname $eifc ip saddr $i4nw udp dport {33434-33523} ct state new accept
+	iifname $iifc oifname $eifc ip6 saddr $i6nw udp dport {33434-33523} ct state new accept
+ } 
+}
+
+#Teil 7 - NAT einrichten (nur IPv4)
+table ip mynat {
+chain mysourcenat {
+	type nat hook postrouting priority 0;
+	oifname $eifc ip saddr $i4nw snat $e4ad
+}
+}
+
+

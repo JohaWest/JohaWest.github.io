@@ -1,0 +1,33 @@
+#!/usr/sbin/nft -f
+
+define iifc = eth1               # Interface name to internal network
+define i4nw = 10.0.4.0/24       # Internal IPv4 network
+define i4ad = 10.0.4.1          # Internal IPv4 address
+define i6nw = 2001:db8:2:0004::/64  # Internal IPv6 network
+define i6ad = 2001:db8:2:0004::1    # Internal IPv6 address
+
+define eifc = eth0               # Interface name to external network
+define e4nw = 192.168.4.0/25    # External IPv4 network
+define e4ad = 192.168.4.1       # External IPv4 address
+define e6nw = 2001:db8:3:0004::/64  # External IPv6 network
+define e6ad = 2001:db8:3:0004::1    # External IPv6 address
+
+define difc = eth2               # Interface name to DMZ network
+define d4nw = 192.168.4.128/25  # DMZ IPv4 network
+define d4ad = 192.168.4.129     # DMZ IPv4 address
+define d6nw = 2001:db8:1:0004::/64  # DMZ IPv6 network
+define d6ad = 2001:db8:1:0004::1    # DMZ IPv6 address
+
+flush ruleset
+
+table inet myfilter {
+  chain myinput {
+    type filter hook input priority 0; policy drop; 
+  }
+  chain myoutput {
+    type filter hook output priority 0; policy drop;
+  }
+  chain myforward {
+    type filter hook forward priority 0; policy drop;
+  }
+}
